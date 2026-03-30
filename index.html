@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Filter XYZ</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@600;700;900&family=Barlow:wght@400;600&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+:root {
+  --bg: #111315;
+  --surface: #1c1f22;
+  --border: #2e3236;
+  --accent: #c8ff4a;
+  --text: #f0f0f0;
+  --muted: #7a7f86;
+  --tungsten: #ffb347;
+  --hmi: #7ec8f5;
+  --white: #ffffff;
+  --mono: 'Share Tech Mono', monospace;
+  --cond: 'Barlow Condensed', sans-serif;
+  --body: 'Barlow', sans-serif;
+}
+
+html, body {
+  height: 100%; background: var(--bg);
+  color: var(--text); font-family: var(--body);
+  overflow: hidden; user-select: none;
+}
+
+/* ══════════════════════════════════════
+   TOP BAR
+══════════════════════════════════════ */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  height: 48px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 12px; gap: 10px;
+}
+
+.app-logo {
+  font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.18em; color: var(--accent); white-space: nowrap;
+}
+
+.spacer { flex: 1; }
+
+.light-toggle {
+  display: flex; border: 1px solid var(--border);
+  border-radius: 4px; overflow: hidden;
+}
+.lt-btn {
+  padding: 5px 10px; font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.06em; border: none; cursor: pointer;
+  background: transparent; color: var(--muted);
+  transition: all 0.15s; display: flex; align-items: center; gap: 5px;
+}
+.lt-btn .dot { width: 7px; height: 7px; border-radius: 50%; }
+.lt-btn.tungsten .dot { background: var(--tungsten); }
+.lt-btn.hmi .dot { background: var(--hmi); }
+.lt-btn.active.tungsten { background: rgba(255,179,71,0.18); color: var(--tungsten); }
+.lt-btn.active.hmi { background: rgba(126,200,245,0.18); color: var(--hmi); }
+
+/* Nav tabs */
+.nav-tabs {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+  height: 56px; background: var(--bg);
+  border-top: 1px solid var(--border);
+  display: flex;
+}
+.nav-tab {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px;
+  cursor: pointer; color: var(--muted); transition: color 0.15s;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em;
+}
+.nav-tab svg { width: 20px; height: 20px; }
+.nav-tab.active { color: var(--accent); }
+
+/* ══════════════════════════════════════
+   PAGES
+══════════════════════════════════════ */
+.page {
+  position: fixed; top: 48px; bottom: 56px; left: 0; right: 0;
+  overflow: hidden;
+}
+
+/* ══════════════════════════════════════
+   FILTER BROWSER PAGE
+══════════════════════════════════════ */
+#pageBrowse { display: flex; flex-direction: column; }
+
+.swipe-container {
+  flex: 1; overflow: hidden; position: relative;
+}
+.swipe-track {
+  display: flex; height: 100%;
+  transition: transform 0.32s cubic-bezier(0.4,0,0.2,1);
+  will-change: transform;
+}
+
+.filter-slide {
+  min-width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  padding: 10px 12px 8px; gap: 8px;
+  overflow: hidden;
+}
+
+/* Color swatch card */
+.color-card {
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+
+.color-swatch {
+  width: 100%; height: 110px; position: relative;
+}
+.light-overlay { position: absolute; inset: 0; pointer-events: none; }
+
+.filter-label-area {
+  padding: 8px 12px 10px;
+  border-top: 1px solid #e8e8e8;
+  background: #fff;
+}
+.filter-name-txt {
+  font-family: var(--cond); font-size: 28px; font-weight: 900;
+  color: #111; text-transform: uppercase; letter-spacing: 0.02em;
+  line-height: 1;
+}
+.filter-num-txt {
+  font-family: var(--mono); font-size: 13px; color: #555;
+  letter-spacing: 0.06em; margin-top: 2px;
+}
+
+/* CIE diagram card */
+.cie-card {
+  background: #fff; border-radius: 10px;
+  overflow: hidden; flex-shrink: 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  cursor: pointer;
+}
+
+.cie-canvas-wrap {
+  position: relative; width: 100%;
+  background: #111;
+}
+#cieCanvas { width: 100%; display: block; }
+
+/* XY big readout — tapped state */
+.xy-big-overlay {
+  display: none; position: absolute; inset: 0;
+  background: #fff;
+  flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px;
+}
+.xy-big-overlay.show { display: flex; }
+
+.xy-big-val {
+  font-family: var(--mono); font-size: 42px; font-weight: 400;
+  color: #111; line-height: 1; letter-spacing: 0.02em;
+  display: flex; align-items: baseline; gap: 8px;
+}
+.xy-big-val .lbl {
+  font-size: 18px; color: #999; font-family: var(--mono);
+}
+.xy-big-y-val {
+  font-family: var(--mono); font-size: 14px; color: #666;
+  letter-spacing: 0.05em; margin-top: 6px;
+}
+.tap-back { font-family: var(--mono); font-size: 9px; color: #bbb; margin-top: 8px; }
+
+/* XY readout BELOW diagram — always visible */
+.xy-readout-bar {
+  background: #fff; padding: 10px 14px 12px;
+  border-top: 2px solid #eee;
+}
+.xy-main {
+  font-family: var(--mono); font-size: 26px; font-weight: 400;
+  color: #111; letter-spacing: 0.03em; line-height: 1;
+}
+.xy-main .sep { color: #bbb; margin: 0 8px; }
+.xy-sub-row {
+  font-family: var(--mono); font-size: 11px; color: #888;
+  margin-top: 4px; letter-spacing: 0.04em;
+}
+
+/* Save button on card */
+.save-btn {
+  position: absolute; top: 8px; right: 8px;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(0,0,0,0.55); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; z-index: 10;
+}
+.save-btn svg { width: 16px; height: 16px; }
+.save-btn.saved { background: var(--accent); }
+.save-btn.saved svg path { fill: #111; }
+
+/* Search bar */
+.search-bar {
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 8px 12px; flex-shrink: 0; position: relative;
+}
+.search-bar svg {
+  position: absolute; left: 22px; top: 50%; transform: translateY(-50%);
+  color: var(--muted); pointer-events: none;
+}
+#searchQ {
+  width: 100%; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 9px 12px 9px 34px;
+  color: var(--text); font-family: var(--mono); font-size: 13px;
+  outline: none; transition: border-color 0.15s;
+}
+#searchQ:focus { border-color: var(--accent); }
+#searchQ::placeholder { color: var(--muted); }
+
+/* Dots */
+.dots-row {
+  display: flex; justify-content: center; gap: 5px;
+  padding: 5px 0; flex-shrink: 0;
+}
+.dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); transition: all 0.25s; }
+.dot.active { background: var(--accent); width: 16px; border-radius: 3px; }
+
+/* Search dropdown */
+.search-dropdown {
+  display: none; position: absolute;
+  bottom: 100%; left: 0; right: 0;
+  background: var(--bg); border-top: 1px solid var(--border);
+  max-height: 55vh; overflow-y: auto; z-index: 100;
+}
+.search-dropdown.open { display: block; }
+.si {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.1s;
+}
+.si:active { background: var(--surface); }
+.si-sw { width: 40px; height: 40px; border-radius: 6px; flex-shrink: 0; }
+.si-info { flex: 1; min-width: 0; }
+.si-name { font-family: var(--cond); font-size: 16px; font-weight: 700; color: var(--text); }
+.si-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.si-xy { font-family: var(--mono); font-size: 11px; color: var(--accent); text-align: right; line-height: 1.5; flex-shrink: 0; }
+
+/* ══════════════════════════════════════
+   SAVED PAGE
+══════════════════════════════════════ */
+#pageSaved {
+  display: none; flex-direction: column;
+  padding: 12px;
+  overflow-y: auto;
+}
+#pageSaved.active { display: flex; }
+
+.saved-header {
+  font-family: var(--cond); font-size: 22px; font-weight: 700;
+  color: var(--text); letter-spacing: 0.05em; text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.saved-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.saved-item {
+  background: var(--surface); border-radius: 10px;
+  overflow: hidden; cursor: pointer;
+  border: 1px solid var(--border);
+  transition: border-color 0.15s;
+  position: relative;
+}
+.saved-item:active { border-color: var(--accent); }
+
+.saved-swatch { width: 100%; height: 80px; }
+
+.saved-info { padding: 7px 8px 9px; }
+.saved-name {
+  font-family: var(--cond); font-size: 14px; font-weight: 700;
+  color: var(--text); text-transform: uppercase; line-height: 1.1;
+  word-break: break-word;
+}
+.saved-num { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 2px; }
+.saved-xy { font-family: var(--mono); font-size: 9px; color: var(--accent); margin-top: 3px; line-height: 1.4; }
+
+.saved-del {
+  position: absolute; top: 5px; right: 5px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(0,0,0,0.6); border: none; cursor: pointer;
+  color: #fff; font-size: 12px; line-height: 22px; text-align: center;
+  display: none;
+}
+.saved-item:hover .saved-del,
+.edit-mode .saved-del { display: block; }
+
+.saved-empty {
+  text-align: center; color: var(--muted); font-family: var(--mono);
+  font-size: 12px; padding: 60px 20px; letter-spacing: 0.05em; line-height: 2;
+}
+
+.edit-mode-btn {
+  margin-left: auto; background: none; border: 1px solid var(--border);
+  color: var(--muted); font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.08em; padding: 4px 10px; border-radius: 4px;
+  cursor: pointer; margin-bottom: 12px;
+}
+.edit-mode-btn.active { border-color: var(--accent); color: var(--accent); }
+
+/* Save dialog */
+.dialog-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7); z-index: 300;
+  align-items: flex-end; justify-content: center;
+}
+.dialog-overlay.show { display: flex; }
+.dialog-box {
+  background: #fff; width: 100%; border-radius: 16px 16px 0 0;
+  padding: 24px 20px 32px;
+}
+.dialog-title {
+  font-family: var(--cond); font-size: 22px; font-weight: 900;
+  color: #111; text-transform: uppercase; margin-bottom: 16px;
+}
+.dialog-swatch {
+  width: 100%; height: 80px; border-radius: 8px; margin-bottom: 14px;
+}
+.dialog-label {
+  font-family: var(--mono); font-size: 11px; color: #888;
+  letter-spacing: 0.08em; margin-bottom: 6px; display: block;
+}
+#saveNameInput {
+  width: 100%; background: #f4f4f4; border: 2px solid #ddd;
+  border-radius: 6px; padding: 12px 14px;
+  font-family: var(--cond); font-size: 22px; font-weight: 700;
+  color: #111; outline: none; text-transform: uppercase;
+}
+#saveNameInput:focus { border-color: #111; }
+.dialog-xy {
+  font-family: var(--mono); font-size: 13px; color: #666;
+  margin-top: 10px; letter-spacing: 0.04em;
+}
+.dialog-btns {
+  display: flex; gap: 10px; margin-top: 18px;
+}
+.btn-cancel {
+  flex: 1; padding: 13px; background: #f0f0f0; border: none;
+  border-radius: 8px; font-family: var(--cond); font-size: 16px;
+  font-weight: 700; color: #666; cursor: pointer; text-transform: uppercase;
+}
+.btn-save {
+  flex: 2; padding: 13px; background: #111; border: none;
+  border-radius: 8px; font-family: var(--cond); font-size: 16px;
+  font-weight: 700; color: #fff; cursor: pointer; text-transform: uppercase;
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="app-logo">CIE 1931</div>
+  <div class="spacer"></div>
+  <div class="light-toggle">
+    <button class="lt-btn tungsten active" onclick="setLight('tungsten')"><span class="dot"></span>3200K</button>
+    <button class="lt-btn hmi" onclick="setLight('hmi')"><span class="dot"></span>5600K</button>
+  </div>
+</div>
+
+<!-- BROWSE PAGE -->
+<div class="page" id="pageBrowse">
+  <div class="swipe-container" id="swipeCont">
+    <div class="swipe-track" id="swipeTrack"></div>
+  </div>
+  <div class="dots-row" id="dots"></div>
+  <div class="search-bar" style="position:relative">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="searchQ" placeholder="Søg filter navn, nummer..." oninput="onSearch()" onfocus="openSearch()" autocomplete="off" spellcheck="false">
+    <div class="search-dropdown" id="searchDropdown"></div>
+  </div>
+</div>
+
+<!-- SAVED PAGE -->
+<div class="page" id="pageSaved">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:0;padding:0 0 0 0">
+    <div class="saved-header">Gemte Filtre</div>
+    <button class="edit-mode-btn" id="editModeBtn" onclick="toggleEditMode()">REDIGER</button>
+  </div>
+  <div class="saved-grid" id="savedGrid"></div>
+  <div class="saved-empty" id="savedEmpty">Ingen gemte filtre endnu.<br>Tryk ★ på et filter for at gemme det.</div>
+</div>
+
+<!-- NAV TABS -->
+<div class="nav-tabs">
+  <div class="nav-tab active" id="tab-browse" onclick="showPage('browse')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+    </svg>
+    FILTRE
+  </div>
+  <div class="nav-tab" id="tab-saved" onclick="showPage('saved')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    </svg>
+    GEMT
+  </div>
+</div>
+
+<!-- SAVE DIALOG -->
+<div class="dialog-overlay" id="saveDialog">
+  <div class="dialog-box">
+    <div class="dialog-title">Gem Filter</div>
+    <div class="dialog-swatch" id="dlgSwatch"></div>
+    <label class="dialog-label">NAVN</label>
+    <input type="text" id="saveNameInput" maxlength="24" placeholder="FILTERNAVN">
+    <div class="dialog-xy" id="dlgXY"></div>
+    <div class="dialog-btns">
+      <button class="btn-cancel" onclick="closeSaveDialog()">ANNULLER</button>
+      <button class="btn-save" onclick="confirmSave()">GEM</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// FILTER DATABASE
+// ═══════════════════════════════════════════════════
+const filters = [
+  { brand:'Rosco', num:'3407', name:'Full CTO',        type:['CTO'],       rgb:[255,147,41],  t:{x:0.5140,y:0.4120,Y:71.4}, h:{x:0.4820,y:0.4060,Y:78.6} },
+  { brand:'Rosco', num:'3408', name:'¾ CTO',           type:['CTO'],       rgb:[255,162,72],  t:{x:0.4880,y:0.4180,Y:74.8}, h:{x:0.4560,y:0.4110,Y:80.2} },
+  { brand:'Rosco', num:'3409', name:'½ CTO',           type:['CTO'],       rgb:[255,185,110], t:{x:0.4520,y:0.4220,Y:78.3}, h:{x:0.4240,y:0.4160,Y:82.6} },
+  { brand:'Rosco', num:'3410', name:'¼ CTO',           type:['CTO'],       rgb:[255,210,160], t:{x:0.4080,y:0.4180,Y:83.2}, h:{x:0.3860,y:0.4120,Y:87.1} },
+  { brand:'Rosco', num:'3411', name:'⅛ CTO',           type:['CTO'],       rgb:[255,228,200], t:{x:0.3760,y:0.3960,Y:88.4}, h:{x:0.3560,y:0.3880,Y:91.2} },
+  { brand:'Lee',   num:'204',  name:'Full CT Orange',  type:['CTO'],       rgb:[255,140,30],  t:{x:0.5280,y:0.4060,Y:69.8}, h:{x:0.4940,y:0.4010,Y:77.2} },
+  { brand:'Lee',   num:'205',  name:'Half CT Orange',  type:['CTO'],       rgb:[255,183,105], t:{x:0.4620,y:0.4200,Y:77.4}, h:{x:0.4340,y:0.4140,Y:81.9} },
+  { brand:'Lee',   num:'206',  name:'Qtr CT Orange',   type:['CTO'],       rgb:[255,214,168], t:{x:0.4020,y:0.4100,Y:84.6}, h:{x:0.3800,y:0.4040,Y:88.3} },
+  { brand:'Lee',   num:'281',  name:'¾ CT Orange',     type:['CTO'],       rgb:[255,158,62],  t:{x:0.4980,y:0.4160,Y:73.2}, h:{x:0.4660,y:0.4090,Y:79.8} },
+  { brand:'Lee',   num:'285',  name:'¾ CT Straw',      type:['CTO'],       rgb:[255,196,80],  t:{x:0.4560,y:0.4360,Y:76.2}, h:{x:0.4280,y:0.4280,Y:81.4} },
+  { brand:'Rosco', num:'3202', name:'Full CTB',        type:['CTB'],       rgb:[100,160,255], t:{x:0.2420,y:0.2610,Y:32.1}, h:{x:0.2680,y:0.2820,Y:42.8} },
+  { brand:'Rosco', num:'3203', name:'½ CTB',           type:['CTB'],       rgb:[150,195,255], t:{x:0.2680,y:0.2940,Y:48.3}, h:{x:0.2920,y:0.3120,Y:60.7} },
+  { brand:'Rosco', num:'3204', name:'¼ CTB',           type:['CTB'],       rgb:[190,218,255], t:{x:0.2920,y:0.3120,Y:64.8}, h:{x:0.3060,y:0.3220,Y:74.2} },
+  { brand:'Rosco', num:'3208', name:'⅛ CTB',           type:['CTB'],       rgb:[215,232,255], t:{x:0.3040,y:0.3200,Y:76.4}, h:{x:0.3100,y:0.3260,Y:83.6} },
+  { brand:'Lee',   num:'201',  name:'Full CT Blue',    type:['CTB'],       rgb:[80,140,255],  t:{x:0.2280,y:0.2480,Y:28.6}, h:{x:0.2540,y:0.2680,Y:39.4} },
+  { brand:'Lee',   num:'202',  name:'Half CT Blue',    type:['CTB'],       rgb:[148,188,255], t:{x:0.2640,y:0.2880,Y:46.2}, h:{x:0.2880,y:0.3060,Y:58.4} },
+  { brand:'Lee',   num:'203',  name:'Qtr CT Blue',     type:['CTB'],       rgb:[192,216,255], t:{x:0.2900,y:0.3100,Y:62.8}, h:{x:0.3040,y:0.3200,Y:72.6} },
+  { brand:'Rosco', num:'3304', name:'Plus Green',      type:['Correction'],rgb:[80,200,100],  t:{x:0.2420,y:0.5180,Y:42.4}, h:{x:0.2280,y:0.5260,Y:46.8} },
+  { brand:'Rosco', num:'3308', name:'Minus Green',     type:['Correction'],rgb:[200,60,160],  t:{x:0.3640,y:0.1720,Y:16.8}, h:{x:0.3480,y:0.1840,Y:20.4} },
+  { brand:'Lee',   num:'244',  name:'Plus Green',      type:['Correction'],rgb:[72,196,88],   t:{x:0.2380,y:0.5220,Y:40.8}, h:{x:0.2240,y:0.5300,Y:45.2} },
+  { brand:'Lee',   num:'089',  name:'Moss Green',      type:['Color'],     rgb:[106,187,56],  t:{x:0.3141,y:0.5635,Y:42.8}, h:{x:0.3020,y:0.5580,Y:48.4} },
+  { brand:'Lee',   num:'139',  name:'Primary Green',   type:['Color'],     rgb:[30,180,60],   t:{x:0.1980,y:0.6120,Y:38.6}, h:{x:0.1860,y:0.6240,Y:42.1} },
+  { brand:'Lee',   num:'122',  name:'Fern Green',      type:['Color'],     rgb:[80,160,60],   t:{x:0.2620,y:0.5480,Y:34.2}, h:{x:0.2480,y:0.5540,Y:39.6} },
+  { brand:'Rosco', num:'91',   name:'Primary Green',   type:['Color'],     rgb:[0,168,48],    t:{x:0.1720,y:0.6480,Y:36.4}, h:{x:0.1620,y:0.6540,Y:41.2} },
+  { brand:'Rosco', num:'74',   name:'Night Blue',      type:['Color'],     rgb:[20,40,140],   t:{x:0.1720,y:0.0980,Y:4.8},  h:{x:0.1880,y:0.1120,Y:7.2}  },
+  { brand:'Lee',   num:'079',  name:'Just Blue',       type:['Color'],     rgb:[0,80,200],    t:{x:0.1480,y:0.1240,Y:8.6},  h:{x:0.1680,y:0.1420,Y:12.4} },
+  { brand:'Lee',   num:'180',  name:'Dark Lavender',   type:['Color'],     rgb:[100,60,160],  t:{x:0.2480,y:0.1440,Y:9.8},  h:{x:0.2620,y:0.1560,Y:13.6} },
+  { brand:'Lee',   num:'058',  name:'Lavender',        type:['Color'],     rgb:[180,120,220], t:{x:0.2920,y:0.2080,Y:22.4}, h:{x:0.3040,y:0.2160,Y:28.6} },
+  { brand:'Rosco', num:'59',   name:'Indigo',          type:['Color'],     rgb:[40,20,120],   t:{x:0.1920,y:0.1040,Y:3.6},  h:{x:0.2080,y:0.1160,Y:5.4}  },
+  { brand:'Lee',   num:'026',  name:'Bright Red',      type:['Color'],     rgb:[220,20,20],   t:{x:0.6380,y:0.3080,Y:12.4}, h:{x:0.6120,y:0.3180,Y:16.8} },
+  { brand:'Lee',   num:'332',  name:'Special Rose Pink',type:['Color'],    rgb:[255,100,140], t:{x:0.4480,y:0.2620,Y:28.4}, h:{x:0.4240,y:0.2720,Y:34.6} },
+  { brand:'Rosco', num:'46',   name:'Magenta',         type:['Color'],     rgb:[220,40,180],  t:{x:0.3820,y:0.1840,Y:18.2}, h:{x:0.3640,y:0.1920,Y:22.8} },
+  { brand:'Lee',   num:'128',  name:'Bright Pink',     type:['Color'],     rgb:[255,60,160],  t:{x:0.4820,y:0.2180,Y:22.6}, h:{x:0.4560,y:0.2280,Y:28.4} },
+  { brand:'Lee',   num:'101',  name:'Yellow',          type:['Color'],     rgb:[255,210,0],   t:{x:0.4840,y:0.4760,Y:79.4}, h:{x:0.4500,y:0.4820,Y:82.1} },
+  { brand:'Rosco', num:'312',  name:'Canary',          type:['Color'],     rgb:[255,228,20],  t:{x:0.4620,y:0.4880,Y:80.6}, h:{x:0.4280,y:0.4960,Y:83.2} },
+  { brand:'Lee',   num:'100',  name:'Spring Yellow',   type:['Color'],     rgb:[200,230,80],  t:{x:0.3820,y:0.4940,Y:62.4}, h:{x:0.3580,y:0.5020,Y:65.8} },
+  { brand:'Lee',   num:'015',  name:'Deep Straw',      type:['Color'],     rgb:[255,180,40],  t:{x:0.4960,y:0.4380,Y:68.4}, h:{x:0.4640,y:0.4320,Y:74.6} },
+  { brand:'Lee',   num:'103',  name:'Straw',           type:['Color'],     rgb:[255,208,100], t:{x:0.4460,y:0.4380,Y:78.2}, h:{x:0.4180,y:0.4320,Y:82.8} },
+  { brand:'Rosco', num:'3000', name:'Tough Silk',      type:['Diffusion'], rgb:[240,238,232], t:{x:0.4480,y:0.4080,Y:90.2}, h:{x:0.3127,y:0.3290,Y:93.8} },
+  { brand:'Rosco', num:'3006', name:'Tough Frost',     type:['Diffusion'], rgb:[230,228,222], t:{x:0.4420,y:0.4040,Y:84.3}, h:{x:0.3127,y:0.3290,Y:87.9} },
+  { brand:'Lee',   num:'216',  name:'White Diffusion', type:['Diffusion'], rgb:[235,233,228], t:{x:0.4420,y:0.4040,Y:87.4}, h:{x:0.3127,y:0.3290,Y:91.2} },
+  { brand:'Lee',   num:'250',  name:'Half White Diff', type:['Diffusion'], rgb:[238,236,232], t:{x:0.4400,y:0.4020,Y:89.8}, h:{x:0.3127,y:0.3290,Y:92.6} },
+  { brand:'Lee',   num:'129',  name:'Heavy Frost',     type:['Diffusion'], rgb:[225,223,218], t:{x:0.4380,y:0.4000,Y:80.6}, h:{x:0.3127,y:0.3290,Y:84.2} },
+  { brand:'Lee',   num:'209',  name:'0.3 ND',          type:['ND'],        rgb:[130,128,124], t:{x:0.3127,y:0.3290,Y:50.0}, h:{x:0.3127,y:0.3290,Y:50.0} },
+  { brand:'Lee',   num:'210',  name:'0.6 ND',          type:['ND'],        rgb:[90,88,84],    t:{x:0.3127,y:0.3290,Y:25.0}, h:{x:0.3127,y:0.3290,Y:25.0} },
+  { brand:'Lee',   num:'211',  name:'0.9 ND',          type:['ND'],        rgb:[60,58,54],    t:{x:0.3127,y:0.3290,Y:12.5}, h:{x:0.3127,y:0.3290,Y:12.5} },
+];
+
+// ═══════════════════════════════════════════════════
+// CIE DATA
+// ═══════════════════════════════════════════════════
+const spectralLocus = [
+  [0.1741,0.0050],[0.1740,0.0050],[0.1736,0.0049],[0.1726,0.0048],
+  [0.1714,0.0051],[0.1689,0.0069],[0.1644,0.0109],[0.1566,0.0177],
+  [0.1440,0.0297],[0.1241,0.0578],[0.0913,0.1327],[0.0454,0.2950],
+  [0.0082,0.5384],[0.0139,0.6868],[0.0743,0.8338],[0.1547,0.8059],
+  [0.2296,0.7543],[0.3016,0.6923],[0.3731,0.6245],[0.4441,0.5547],
+  [0.5125,0.4866],[0.5752,0.4242],[0.6270,0.3725],[0.6658,0.3340],
+  [0.6915,0.3083],[0.7079,0.2920],[0.7140,0.2859],
+];
+const planckianLocus = [
+  {K:1500,x:0.5857,y:0.3931},{K:2000,x:0.5267,y:0.4133},
+  {K:2500,x:0.4770,y:0.4137},{K:3000,x:0.4369,y:0.4041},{K:3200,x:0.4255,y:0.3988},
+  {K:4000,x:0.3805,y:0.3768},{K:5000,x:0.3451,y:0.3516},{K:5600,x:0.3324,y:0.3474},
+  {K:6500,x:0.3135,y:0.3237},{K:8000,x:0.2952,y:0.3106},
+];
+const D_3200={x:0.4255,y:0.3988}, D_5600={x:0.3324,y:0.3474};
+
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+let lightSource = 'tungsten';
+let currentIdx = 0;
+let touchStartX=0, touchStartY=0, isDragging=false;
+let diagFlipped = {};
+let searchOpen = false;
+let savedFilters = JSON.parse(localStorage.getItem('savedFilters') || '[]');
+let editMode = false;
+let pendingSave = null;
+let currentPage = 'browse';
+
+// ═══════════════════════════════════════════════════
+// BUILD
+// ═══════════════════════════════════════════════════
+function buildSlides() {
+  const track = document.getElementById('swipeTrack');
+  const W = window.innerWidth;
+  const cieH = Math.round(W * 0.62);
+
+  track.innerHTML = filters.map((f,i) => `
+    <div class="filter-slide" id="slide-${i}">
+      <div class="color-card">
+        <div class="color-swatch" id="sw-${i}" style="background:rgb(${f.rgb.join(',')})">
+          <div class="light-overlay" id="ov-${i}"></div>
+          <button class="save-btn ${isSaved(i)?'saved':''}" id="sbtn-${i}" onclick="openSaveDialog(${i},event)">
+            <svg viewBox="0 0 24 24" fill="${isSaved(i)?'#111':'none'}" stroke="${isSaved(i)?'#111':'white'}" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </button>
+        </div>
+        <div class="filter-label-area">
+          <div class="filter-name-txt">${f.name}</div>
+          <div class="filter-num-txt">${f.brand} · ${f.num} · ${f.type.join(' ')}</div>
+        </div>
+      </div>
+
+      <div class="cie-card" onclick="toggleDiag(${i})">
+        <div class="cie-canvas-wrap" style="height:${cieH}px">
+          <canvas id="cie-${i}" width="${W*2}" height="${cieH*2}" style="width:${W}px;height:${cieH}px;display:block"></canvas>
+          <div class="xy-big-overlay" id="big-${i}">
+            <div class="xy-big-val"><span class="lbl">x</span><span id="xv-${i}">—</span></div>
+            <div class="xy-big-val"><span class="lbl">y</span><span id="yv-${i}">—</span></div>
+            <div class="xy-big-y-val" id="yb-${i}">Y = —</div>
+            <div class="tap-back">TAP FOR DIAGRAM</div>
+          </div>
+        </div>
+        <div class="xy-readout-bar">
+          <div class="xy-main" id="xym-${i}">x=— <span class="sep">·</span> y=—</div>
+          <div class="xy-sub-row" id="xys-${i}">Y=—  ·  CCT≈—K</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  buildDots();
+  updateAll();
+}
+
+function buildDots() {
+  const n = Math.min(filters.length, 20);
+  document.getElementById('dots').innerHTML =
+    Array.from({length:n},(_,i)=>`<div class="dot${i===0?' active':''}" id="dot-${i}"></div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════
+// CIE 1931 DRAW
+// ═══════════════════════════════════════════════════
+function drawCIE(idx) {
+  const f = filters[idx];
+  const cie = lightSource==='tungsten'?f.t:f.h;
+  const canvas = document.getElementById(`cie-${idx}`);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const m = 44;
+  const xMin=0,xMax=0.8,yMin=0,yMax=0.9;
+  function tc(cx,cy){return[m+(cx-xMin)/(xMax-xMin)*(W-m*2),H-m-(cy-yMin)/(yMax-yMin)*(H-m*2)];}
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,W,H);
+
+  // clip & fill horseshoe
+  ctx.save();
+  ctx.beginPath();
+  spectralLocus.forEach(([x,y],i)=>{const[cx,cy]=tc(x,y);i===0?ctx.moveTo(cx,cy):ctx.lineTo(cx,cy);});
+  ctx.lineTo(...tc(0.7347,0.2653)); ctx.lineTo(...tc(0.1741,0.0050)); ctx.closePath(); ctx.clip();
+  const step=0.012;
+  for(let xi=0;xi<0.78;xi+=step){for(let yi=0;yi<0.88;yi+=step){const rgb=xyToRGB(xi,yi);if(rgb){const[cx,cy]=tc(xi,yi);const sz=step/(xMax-xMin)*(W-m*2)+1;ctx.fillStyle=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;ctx.fillRect(cx,cy-sz,sz+1,sz+1);}}}
+  ctx.restore();
+
+  // outline
+  ctx.beginPath(); spectralLocus.forEach(([x,y],i)=>{const[cx,cy]=tc(x,y);i===0?ctx.moveTo(cx,cy):ctx.lineTo(cx,cy);}); ctx.closePath();
+  ctx.strokeStyle='rgba(255,255,255,0.4)'; ctx.lineWidth=2; ctx.stroke();
+
+  // planckian
+  ctx.beginPath(); planckianLocus.forEach(({x,y},i)=>{const[cx,cy]=tc(x,y);i===0?ctx.moveTo(cx,cy):ctx.lineTo(cx,cy);});
+  ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.lineWidth=2; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
+
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1;
+  for(let v=0;v<=8;v++){const xv=v*0.1;ctx.beginPath();ctx.moveTo(...tc(xv,0));ctx.lineTo(...tc(xv,0.9));ctx.stroke();ctx.fillStyle='rgba(255,255,255,0.25)';ctx.font=`${W*0.022}px monospace`;const[lx,ly]=tc(xv,0);ctx.fillText(xv.toFixed(1),lx-W*0.013,ly+W*0.02);}
+  for(let v=1;v<=9;v++){const yv=v*0.1;ctx.beginPath();ctx.moveTo(...tc(0,yv));ctx.lineTo(...tc(0.8,yv));ctx.stroke();ctx.fillStyle='rgba(255,255,255,0.25)';ctx.font=`${W*0.022}px monospace`;const[lx,ly]=tc(0,yv);ctx.fillText(yv.toFixed(1),lx-W*0.05,ly+W*0.008);}
+
+  // light source
+  const src=lightSource==='tungsten'?D_3200:D_5600;
+  const[sx,sy]=tc(src.x,src.y);
+  ctx.beginPath();ctx.arc(sx,sy,8,0,Math.PI*2);ctx.fillStyle=lightSource==='tungsten'?'#ffb347':'#7ec8f5';ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle=lightSource==='tungsten'?'#ffb347':'#7ec8f5';ctx.font=`bold ${W*0.025}px monospace`;ctx.fillText(lightSource==='tungsten'?'3200K':'5600K',sx+12,sy-4);
+
+  // filter point & crosshair
+  const[fx,fy]=tc(cie.x,cie.y);
+  ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(fx,fy);ctx.strokeStyle='rgba(200,255,74,0.35)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle='rgba(200,255,74,0.25)';ctx.lineWidth=1;ctx.setLineDash([2,5]);
+  ctx.beginPath();ctx.moveTo(m,fy);ctx.lineTo(W-m,fy);ctx.moveTo(fx,m);ctx.lineTo(fx,H-m);ctx.stroke();ctx.setLineDash([]);
+  ctx.beginPath();ctx.arc(fx,fy,14,0,Math.PI*2);ctx.fillStyle='rgba(200,255,74,0.2)';ctx.fill();
+  ctx.beginPath();ctx.arc(fx,fy,7,0,Math.PI*2);ctx.fillStyle='#c8ff4a';ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=2.5;ctx.stroke();
+}
+
+function xyToRGB(x,y){const Y=0.5;if(y<0.001)return null;const X=(Y/y)*x,Z=(Y/y)*(1-x-y);let r=3.2406*X-1.5372*Y-0.4986*Z,g=-0.9689*X+1.8758*Y+0.0415*Z,b=0.0557*X-0.2040*Y+1.0570*Z;if(r<0&&g<0&&b<0)return null;r=Math.max(0,r);g=Math.max(0,g);b=Math.max(0,b);const mx=Math.max(r,g,b);if(mx>1){r/=mx;g/=mx;b/=mx;}const gm=v=>v<=0.0031308?12.92*v:1.055*Math.pow(v,1/2.4)-0.055;return[Math.round(gm(r)*255),Math.round(gm(g)*255),Math.round(gm(b)*255)];}
+
+// ═══════════════════════════════════════════════════
+// UPDATE
+// ═══════════════════════════════════════════════════
+function updateAll() {
+  filters.forEach((f,i)=>{
+    const cie=lightSource==='tungsten'?f.t:f.h;
+    const cct=estCCT(cie.x,cie.y);
+    const el=document.getElementById(`xym-${i}`);
+    if(el) el.innerHTML=`x=${cie.x.toFixed(4)} <span class="sep">·</span> y=${cie.y.toFixed(4)}`;
+    const sub=document.getElementById(`xys-${i}`);
+    if(sub) sub.textContent=`Y=${cie.Y.toFixed(1)}%  ·  CCT≈${cct}K`;
+    const xv=document.getElementById(`xv-${i}`);if(xv)xv.textContent=cie.x.toFixed(4);
+    const yv=document.getElementById(`yv-${i}`);if(yv)yv.textContent=cie.y.toFixed(4);
+    const yb=document.getElementById(`yb-${i}`);if(yb)yb.textContent=`Y = ${cie.Y.toFixed(1)}%  ·  CCT ≈ ${cct}K`;
+    const ov=document.getElementById(`ov-${i}`);
+    if(ov) ov.style.background=lightSource==='tungsten'?'radial-gradient(ellipse at 35% 35%,rgba(255,180,80,0.28) 0%,transparent 65%)':'radial-gradient(ellipse at 35% 35%,rgba(126,200,245,0.25) 0%,transparent 65%)';
+    if(Math.abs(i-currentIdx)<=1) drawCIE(i);
+  });
+}
+
+function estCCT(x,y){const n=(x-0.3320)/(0.1858-y);const c=Math.round(449*n*n*n+3525*n*n+6823.3*n+5520.33);if(c<800||c>25000)return'—';return c.toLocaleString('da-DK');}
+
+// ═══════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════
+function goTo(idx) {
+  idx=Math.max(0,Math.min(filters.length-1,idx));
+  currentIdx=idx;
+  document.getElementById('swipeTrack').style.transform=`translateX(-${idx*100}%)`;
+  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
+  setTimeout(()=>{drawCIE(idx);if(idx>0)drawCIE(idx-1);if(idx<filters.length-1)drawCIE(idx+1);},50);
+}
+
+function toggleDiag(i) {
+  diagFlipped[i]=!diagFlipped[i];
+  document.getElementById(`big-${i}`).classList.toggle('show',diagFlipped[i]);
+}
+
+// ═══════════════════════════════════════════════════
+// LIGHT SOURCE
+// ═══════════════════════════════════════════════════
+function setLight(src) {
+  lightSource=src;
+  document.querySelectorAll('.lt-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`.lt-btn.${src}`).classList.add('active');
+  updateAll();
+}
+
+// ═══════════════════════════════════════════════════
+// TOUCH
+// ═══════════════════════════════════════════════════
+const cont=document.getElementById('swipeCont');
+cont.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;isDragging=true;},{passive:true});
+cont.addEventListener('touchmove',e=>{if(!isDragging)return;const dx=e.touches[0].clientX-touchStartX;const dy=e.touches[0].clientY-touchStartY;if(Math.abs(dx)>Math.abs(dy))e.preventDefault();},{passive:false});
+cont.addEventListener('touchend',e=>{if(!isDragging)return;isDragging=false;const dx=e.changedTouches[0].clientX-touchStartX;const dy=e.changedTouches[0].clientY-touchStartY;if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>40)goTo(currentIdx+(dx<0?1:-1));});
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')goTo(currentIdx-1);if(e.key==='ArrowRight')goTo(currentIdx+1);if(e.key==='Escape')closeSearch();});
+
+// ═══════════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════════
+function openSearch(){searchOpen=true;document.getElementById('searchDropdown').classList.add('open');renderSearch();}
+function closeSearch(){searchOpen=false;document.getElementById('searchDropdown').classList.remove('open');document.getElementById('searchQ').blur();}
+function onSearch(){if(!searchOpen)openSearch();renderSearch();}
+function renderSearch(){
+  const q=document.getElementById('searchQ').value.toLowerCase();
+  const res=document.getElementById('searchDropdown');
+  const matches=filters.filter(f=>!q||f.name.toLowerCase().includes(q)||f.num.toLowerCase().includes(q)||f.brand.toLowerCase().includes(q)||f.type.some(t=>t.toLowerCase().includes(q)));
+  res.innerHTML=matches.map(f=>{
+    const cie=lightSource==='tungsten'?f.t:f.h;
+    const idx=filters.indexOf(f);
+    return`<div class="si" onclick="jumpTo(${idx})"><div class="si-sw" style="background:rgb(${f.rgb.join(',')})"></div><div class="si-info"><div class="si-name">${f.name}</div><div class="si-sub">${f.brand} · ${f.num} · ${f.type.join(' ')}</div></div><div class="si-xy">x=${cie.x.toFixed(4)}<br>y=${cie.y.toFixed(4)}</div></div>`;
+  }).join('')||'<div style="text-align:center;color:#555;padding:40px;font-size:12px;font-family:monospace">Ingen resultater</div>';
+}
+function jumpTo(idx){document.getElementById('searchQ').value='';closeSearch();goTo(idx);}
+cont.addEventListener('touchstart',()=>{if(searchOpen)closeSearch();},{passive:true});
+
+// ═══════════════════════════════════════════════════
+// SAVE / UNSAVE
+// ═══════════════════════════════════════════════════
+function isSaved(idx) { return savedFilters.some(s=>s.filterIdx===idx); }
+
+function openSaveDialog(idx, e) {
+  e.stopPropagation();
+  if(isSaved(idx)) { unsaveFilter(idx); return; }
+  const f = filters[idx];
+  const cie = lightSource==='tungsten'?f.t:f.h;
+  pendingSave = {filterIdx:idx, lightSource, rgb:f.rgb, cie};
+  document.getElementById('dlgSwatch').style.background=`rgb(${f.rgb.join(',')})`;
+  document.getElementById('saveNameInput').value=f.name.toUpperCase();
+  document.getElementById('dlgXY').textContent=`x=${cie.x.toFixed(4)}  y=${cie.y.toFixed(4)}  ·  ${lightSource==='tungsten'?'3200K':'5600K'}`;
+  document.getElementById('saveDialog').classList.add('show');
+  setTimeout(()=>document.getElementById('saveNameInput').select(),200);
+}
+
+function closeSaveDialog() {
+  document.getElementById('saveDialog').classList.remove('show');
+  pendingSave=null;
+}
+
+function confirmSave() {
+  if(!pendingSave) return;
+  const name = document.getElementById('saveNameInput').value.trim() || filters[pendingSave.filterIdx].name;
+  savedFilters.push({...pendingSave, customName:name, id:Date.now()});
+  localStorage.setItem('savedFilters',JSON.stringify(savedFilters));
+  updateSaveBtn(pendingSave.filterIdx, true);
+  closeSaveDialog();
+  renderSavedPage();
+}
+
+function unsaveFilter(idx) {
+  savedFilters = savedFilters.filter(s=>s.filterIdx!==idx);
+  localStorage.setItem('savedFilters',JSON.stringify(savedFilters));
+  updateSaveBtn(idx,false);
+  renderSavedPage();
+}
+
+function updateSaveBtn(idx, saved) {
+  const btn=document.getElementById(`sbtn-${idx}`);
+  if(!btn) return;
+  btn.classList.toggle('saved',saved);
+  btn.innerHTML=`<svg viewBox="0 0 24 24" fill="${saved?'#111':'none'}" stroke="${saved?'#111':'white'}" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+}
+
+// ═══════════════════════════════════════════════════
+// SAVED PAGE
+// ═══════════════════════════════════════════════════
+function renderSavedPage() {
+  const grid=document.getElementById('savedGrid');
+  const empty=document.getElementById('savedEmpty');
+  if(savedFilters.length===0){grid.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  grid.innerHTML=savedFilters.map(s=>{
+    const f=filters[s.filterIdx];
+    return`<div class="saved-item ${editMode?'edit-mode':''}" onclick="savedItemClick(${s.id})">
+      <div class="saved-swatch" style="background:rgb(${s.rgb.join(',')})"></div>
+      <div class="saved-info">
+        <div class="saved-name">${s.customName}</div>
+        <div class="saved-num">${f.brand} · ${f.num}</div>
+        <div class="saved-xy">x=${s.cie.x.toFixed(4)}<br>y=${s.cie.y.toFixed(4)}</div>
+      </div>
+      <button class="saved-del ${editMode?'':'hidden'}" onclick="deleteSaved(${s.id},event)">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function savedItemClick(id) {
+  if(editMode) return;
+  const s=savedFilters.find(x=>x.id===id);
+  if(!s) return;
+  showPage('browse');
+  setTimeout(()=>goTo(s.filterIdx),100);
+}
+
+function deleteSaved(id,e) {
+  e.stopPropagation();
+  savedFilters=savedFilters.filter(s=>s.id!==id);
+  localStorage.setItem('savedFilters',JSON.stringify(savedFilters));
+  renderSavedPage();
+  // Update star button if visible
+  filters.forEach((_,i)=>updateSaveBtn(i,isSaved(i)));
+}
+
+function toggleEditMode() {
+  editMode=!editMode;
+  document.getElementById('editModeBtn').classList.toggle('active',editMode);
+  document.getElementById('editModeBtn').textContent=editMode?'FÆRDIG':'REDIGER';
+  renderSavedPage();
+}
+
+// ═══════════════════════════════════════════════════
+// PAGE SWITCHING
+// ═══════════════════════════════════════════════════
+function showPage(p) {
+  currentPage=p;
+  document.getElementById('pageBrowse').style.display=p==='browse'?'flex':'none';
+  document.getElementById('pageSaved').style.display=p==='saved'?'flex':'none';
+  document.getElementById('tab-browse').classList.toggle('active',p==='browse');
+  document.getElementById('tab-saved').classList.toggle('active',p==='saved');
+  if(p==='saved') renderSavedPage();
+}
+
+// ═══════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════
+buildSlides();
+showPage('browse');
+</script>
+</body>
+</html>
